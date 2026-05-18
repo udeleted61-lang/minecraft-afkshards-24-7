@@ -1,11 +1,11 @@
 const mineflayer = require('mineflayer');
 const http = require('http');
 
-// 1. DUMMY WEB SERVER FOR RAILWAY HEALTH CHECKS
+// 1. DUMMY WEB SERVER
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Minecraft TPA Auto-Request/Accept Bots are Online!\n');
+  res.end('Minecraft Radar AFK Bots are Online!\n');
 }).listen(PORT, () => {
   console.log(`[System] Dummy server listening on port ${PORT}`);
 });
@@ -35,15 +35,14 @@ function spawnAFKBot(account) {
   });
 
   let tpaLoop = null; 
+  let radarLoop = null;
   bot.isTeleporting = false; 
 
-  // Helper function to shut down the outgoing spam loop
-  function killSpamLoop() {
-    if (tpaLoop) {
-      clearInterval(tpaLoop);
-      tpaLoop = null;
-      console.log(`[${account.username}] Outgoing TPA loop stopped.`);
-    }
+  function killLoops() {
+    if (tpaLoop) clearInterval(tpaLoop);
+    if (radarLoop) clearInterval(radarLoop);
+    tpaLoop = null;
+    radarLoop = null;
   }
 
   bot.once('spawn', () => {
@@ -52,63 +51,53 @@ function spawnAFKBot(account) {
     setTimeout(() => {
       bot.chat(`/login ${account.password}`);
       
-      // AUTOMATIC OUTGOING TPA SPAM
-      setTimeout(() => {
-        killSpamLoop();
-        console.log(`[${account.username}] Starting automatic 10s TPA spam to ${CONTROLLER_NAME}...`);
-        
-        bot.chat(`/tpa ${CONTROLLER_NAME}`);
-        tpaLoop = setInterval(() => {
-          if (!bot.isTeleporting) {
-            bot.chat(`/tpa ${CONTROLLER_NAME}`);
-          }
-        }, 10000);
-      }, 3000);
+      // THE RADAR SYSTEM: Wait for you to log in before doing anything
+      console.log(`[${account.username}] Activating Radar. Waiting for ${CONTROLLER_NAME} to come online...`);
+      
+      radarLoop = setInterval(() => {
+        // Checks the server's Tab list for your username
+        if (bot.players[CONTROLLER_NAME]) {
+          console.log(`[${account.username}] RADAR DETECTED MAIN PLAYER! Starting TPA sequence...`);
+          
+          clearInterval(radarLoop); // Turn off radar once found
+          
+          // Start spamming TPA every 10 seconds
+          bot.chat(`/tpa ${CONTROLLER_NAME}`);
+          tpaLoop = setInterval(() => {
+            if (!bot.isTeleporting) bot.chat(`/tpa ${CONTROLLER_NAME}`);
+          }, 10000);
+        }
+      }, 5000); // Scans every 5 seconds
 
     }, 1500);
   });
 
-  // Anti-AFK Loop: Active only when not in a countdown
+  // Anti-AFK Loop
   const afkInterval = setInterval(() => {
     if (bot.entity && !bot.isTeleporting) {
       bot.swingArm('right');
     }
   }, 30000);
 
-  // EMERGENCY CHAT COMMANDS
-  bot.on('chat', (username, message) => {
-    if (username !== CONTROLLER_NAME) return;
-
-    if (message === '!stop') {
-      killSpamLoop();
-    }
-    if (message === '!start') {
-      bot.chat(`/tpa ${CONTROLLER_NAME}`);
-    }
-  });
-
-  // SERVER MESSAGE MONITOR (Handles Incoming TPA Requests & Inbound/Outbound Confirmations)
+  // CHAT MONITOR (Handles TPA requests and countdown freezing)
   bot.on('message', (jsonMsg) => {
     const serverMessage = jsonMsg.toString().toLowerCase();
     const lowerController = CONTROLLER_NAME.toLowerCase();
 
-    // --- CASE A: YOU sent a TPA request TO the bot ---
-    // Looks for patterns like "username has requested to teleport to you"
-    if (serverMessage.includes(lowerController) && (serverMessage.includes('request') || serverMessage.includes('tpa'))) {
-      console.log(`[${account.username}] Detected incoming TPA from main player. Accepting instantly...`);
+    // --- 1. DETECT INCOMING TPA OR TPAHERE FROM YOU ---
+    if (serverMessage.includes(lowerController) && (serverMessage.includes('request') || serverMessage.includes('teleport') || serverMessage.includes('here'))) {
+      console.log(`[${account.username}] Incoming teleport request from boss. Accepting...`);
       bot.chat('/tpaccept');
-      return; // Stop processing further for this message
     }
 
-    // --- CASE B: TELEPORT HAS BEEN CONFIRMED (Works for both directions) ---
-    // Catches words like "accepted", "teleporting", "countdown"
-    if ((serverMessage.includes('accepted') || serverMessage.includes('teleport')) && !bot.isTeleporting) {
-      console.log(`[${account.username}] Teleport sequence initialized. Freezing movement...`);
+    // --- 2. DETECT TELEPORT COUNTDOWN/SUCCESS ---
+    if ((serverMessage.includes('accepted') || serverMessage.includes('teleporting')) && !bot.isTeleporting) {
+      console.log(`[${account.username}] Teleport confirmed! Freezing for countdown...`);
       
       bot.isTeleporting = true; 
-      killSpamLoop(); // Turn off outgoing spam instantly
+      if (tpaLoop) clearInterval(tpaLoop); // Stop outgoing spam!
 
-      // Freeze for 8 seconds (5s server countdown + 3s chunk buffer)
+      // Freeze for 8 seconds
       setTimeout(() => {
         bot.isTeleporting = false;
         console.log(`[${account.username}] Teleport complete. Bot is active.`);
@@ -116,10 +105,10 @@ function spawnAFKBot(account) {
     }
   });
 
-  // Auto-Reconnect Logic
+  // Auto-Reconnect
   bot.on('end', (reason) => {
-    console.log(`[${account.username}] Disconnected: (${reason}). Cleaning up loops...`);
-    killSpamLoop();
+    console.log(`[${account.username}] Disconnected: (${reason}). Cleaning up...`);
+    killLoops();
     clearInterval(afkInterval);
     setTimeout(() => spawnAFKBot(account), 15000);
   });
@@ -127,11 +116,10 @@ function spawnAFKBot(account) {
   bot.on('error', (err) => console.error(`[${account.username}] Error:`, err.message));
 }
 
-// Start sequence
 if (accounts.length === 0) {
   console.error("[System Error] No bot credentials found in Railway variables.");
   process.exit(1);
 } else {
-  console.log(`[System] Launching ${accounts.length} Dual-TPA accounts...`);
+  console.log(`[System] Launching ${accounts.length} bots with Radar capabilities...`);
   accounts.forEach(spawnAFKBot);
 }
