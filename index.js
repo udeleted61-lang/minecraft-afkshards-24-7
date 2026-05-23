@@ -5,13 +5,13 @@ const http = require('http');
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Minecraft 4-Bot Cluster with Lobby-Passer is Online!\n');
+  res.end('Minecraft Staggered 4-Bot Cluster is Online!\n');
 }).listen(PORT, () => console.log(`[System] Dummy server running on port ${PORT}`));
 
 // 2. HARDCODED TARGET ACCOUNT
 const BOSS_NAME = 'Zzynox_'; 
 
-// 3. ENVIRONMENT CONFIGURATION (EXPANDED TO 4 BOTS)
+// 3. ENVIRONMENT CONFIGURATION
 const SERVER_HOST = process.env.SERVER_HOST;
 const SERVER_PORT = parseInt(process.env.SERVER_PORT || '25565', 10);
 
@@ -31,49 +31,49 @@ if (process.env.BOT_4_USER && process.env.BOT_4_PASS) {
 
 // 4. BOT ENGINE
 function spawnAFKBot(account) {
-  console.log(`[System] Launching instance: ${account.username}...`);
+  console.log(`[System] Initializing safe connection routine for: ${account.username}...`);
 
   const bot = mineflayer.createBot({
     host: SERVER_HOST,
     port: SERVER_PORT,
     username: account.username,
-    auth: 'offline'
+    auth: 'offline',
+    // Set explicit keepAlive to prevent ECONNRESET issues
+    checkTimeoutInterval: 60000,
+    version: false // Auto-negotiate protocol version, set to a specific version like '1.20.2' if needed
   });
 
   bot.isTeleporting = false; 
   let autoAcceptInterval = null;
 
   bot.once('spawn', () => {
-    console.log(`[${account.username}] Established link. Initializing login routine...`);
+    console.log(`[${account.username}] Connection accepted. Logging in...`);
     
     setTimeout(() => {
-      // STEP 1: Log into the lobby server
       bot.chat(`/login ${account.password}`);
-      console.log(`[${account.username}] Login string executed.`);
+      console.log(`[${account.username}] Login executed.`);
       
-      // STEP 2: WAIT 3 SECONDS, THEN RUN THE LOBBY COMMAND TO TELEPORT TO THE MAIN WORLD
+      // Delay before running lobby transit to let world load
       setTimeout(() => {
-        console.log(`[${account.username}] Sending server transit command: /maghrebsmp`);
+        console.log(`[${account.username}] Transferring via /maghrebsmp`);
         bot.chat('/maghrebsmp');
 
-        // STEP 3: WAIT AN ADDITIONAL 4 SECONDS FOR WORLD LOADING BEFORE STARTING AUTO-ACCEPT
+        // Allow server time to swap worlds safely
         setTimeout(() => {
-          console.log(`[${account.username}] World loaded. Activating fallback auto-accept loop.`);
+          console.log(`[${account.username}] World swap clear. Teleport handler online.`);
           
           if (autoAcceptInterval) clearInterval(autoAcceptInterval);
-          
-          // Every 5 seconds, attempt to run /tpaccept just in case a request is waiting
           autoAcceptInterval = setInterval(() => {
             if (!bot.isTeleporting) {
               bot.chat('/tpaccept');
             }
           }, 5000);
           
-        }, 4000);
+        }, 5000);
 
-      }, 3000); // 3 seconds buffer after login to execute server transfer
+      }, 4000);
 
-    }, 3000); // Initial spawn buffer
+    }, 3000);
   });
 
   // Anti-AFK Swing (30-second loop)
@@ -87,10 +87,8 @@ function spawnAFKBot(account) {
     const cleanLine = rawLine.toLowerCase().trim();
     const targetLower = BOSS_NAME.toLowerCase();
 
-    // Trigger A: Manual trigger override from public chat
     if (cleanLine.includes(targetLower)) {
       if (cleanLine.includes('!tpa') && !bot.isTeleporting) {
-        console.log(`[${account.username}] Manual !tpa command caught.`);
         bot.chat(`/tpa ${BOSS_NAME}`);
       }
       if (cleanLine.includes('!accept')) {
@@ -98,36 +96,45 @@ function spawnAFKBot(account) {
       }
     }
 
-    // Trigger B: Teleport countdown catch
     if ((cleanLine.includes('accepted') || cleanLine.includes('teleporting') || cleanLine.includes('countdown')) && !bot.isTeleporting) {
-      console.log(`[${account.username}] Teleport confirmation registered. Freezing all interactions.`);
+      console.log(`[${account.username}] Teleport starting. Freezing actions...`);
       bot.isTeleporting = true; 
 
-      // 8 seconds total lockdown (5s countdown + 3s server world rendering buffer)
       setTimeout(() => {
         bot.isTeleporting = false;
-        console.log(`[${account.username}] Safe arrival. Anti-AFK routines operational.`);
+        console.log(`[${account.username}] Freezing ended. Active in zone.`);
       }, 8000);
     }
   });
 
-  // Auto-Reconnect Structure
+  // Auto-Reconnect Sequence with anti-spam backoff
   bot.on('end', (reason) => {
-    console.log(`[${account.username}] Lost connection: (${reason}). Re-instantiating in 15s...`);
+    console.log(`[${account.username}] Disconnected: (${reason}). Cooling down for 20s...`);
     if (autoAcceptInterval) clearInterval(autoAcceptInterval);
     clearInterval(afkInterval);
-    setTimeout(() => spawnAFKBot(account), 15000);
+    setTimeout(() => spawnAFKBot(account), 20000);
   });
 
-  bot.on('error', (err) => console.error(`[${account.username}] Operational error:`, err.message));
+  bot.on('error', (err) => {
+    if (err.code === 'ECONNRESET') {
+      console.log(`[${account.username}] Server forcefully reset connection (ECONNRESET). Retrying securely...`);
+    } else {
+      console.error(`[${account.username}] Error:`, err.message);
+    }
+  });
 }
 
-// Global Launcher Sequence
+// 5. STAGGERED INITIAL LAUNCH ROUTINE
 if (accounts.length === 0) {
-  console.error("[System Error] No credentials found in configurations. Build paused.");
+  console.error("[System Error] Missing configuration variables.");
   process.exit(1);
 } else {
-  console.log(`[System] Initializing cluster matrix for ${accounts.length} nodes...`);
-  accounts.forEach(spawnAFKBot);
-           }
-      
+  console.log(`[System] Initializing staggered deployment for ${accounts.length} nodes...`);
+  
+  // Loops through accounts and spaces them out by 10 seconds each to avoid anti-bot triggers
+  accounts.forEach((account, index) => {
+    setTimeout(() => {
+      spawnAFKBot(account);
+    }, index * 10000); // 0s, 10s, 20s, 30s delay intervals
+  });
+}
