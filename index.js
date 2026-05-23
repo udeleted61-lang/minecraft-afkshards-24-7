@@ -5,7 +5,7 @@ const http = require('http');
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Minecraft 4-Bot Cluster is Online!\n');
+  res.end('Minecraft 4-Bot Cluster with Lobby-Passer is Online!\n');
 }).listen(PORT, () => console.log(`[System] Dummy server running on port ${PORT}`));
 
 // 2. HARDCODED TARGET ACCOUNT
@@ -47,19 +47,33 @@ function spawnAFKBot(account) {
     console.log(`[${account.username}] Established link. Initializing login routine...`);
     
     setTimeout(() => {
+      // STEP 1: Log into the lobby server
       bot.chat(`/login ${account.password}`);
       console.log(`[${account.username}] Login string executed.`);
       
-      // FALLBACK AUTOMATION LOOP: 
-      // Every 5 seconds, the bot will silently attempt to run /tpaccept just in case 
-      // you sent a /tpahere request, bypassing chat parsing failures entirely!
-      autoAcceptInterval = setInterval(() => {
-        if (!bot.isTeleporting) {
-          bot.chat('/tpaccept');
-        }
-      }, 5000);
+      // STEP 2: WAIT 3 SECONDS, THEN RUN THE LOBBY COMMAND TO TELEPORT TO THE MAIN WORLD
+      setTimeout(() => {
+        console.log(`[${account.username}] Sending server transit command: /maghrebsmp`);
+        bot.chat('/maghrebsmp');
 
-    }, 3000);
+        // STEP 3: WAIT AN ADDITIONAL 4 SECONDS FOR WORLD LOADING BEFORE STARTING AUTO-ACCEPT
+        setTimeout(() => {
+          console.log(`[${account.username}] World loaded. Activating fallback auto-accept loop.`);
+          
+          if (autoAcceptInterval) clearInterval(autoAcceptInterval);
+          
+          // Every 5 seconds, attempt to run /tpaccept just in case a request is waiting
+          autoAcceptInterval = setInterval(() => {
+            if (!bot.isTeleporting) {
+              bot.chat('/tpaccept');
+            }
+          }, 5000);
+          
+        }, 4000);
+
+      }, 3000); // 3 seconds buffer after login to execute server transfer
+
+    }, 3000); // Initial spawn buffer
   });
 
   // Anti-AFK Swing (30-second loop)
