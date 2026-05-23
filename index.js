@@ -129,4 +129,5 @@ if (accounts.length === 0) {
 } else {
   console.log(`[System] Initializing cluster matrix for ${accounts.length} nodes...`);
   accounts.forEach(spawnAFKBot);
-}
+           }
+      
