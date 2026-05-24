@@ -5,7 +5,7 @@ const http = require('http');
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Minecraft Anti-Detection Cluster is Running!\n');
+  res.end('Minecraft Stealth Matrix is Online!\n');
 }).listen(PORT, () => console.log(`[System] Dummy server online on port ${PORT}`));
 
 // 2. TARGET CONFIGURATION
@@ -20,59 +20,59 @@ if (process.env.BOT_2_USER && process.env.BOT_2_PASS) accounts.push({ username: 
 if (process.env.BOT_3_USER && process.env.BOT_3_PASS) accounts.push({ username: process.env.BOT_3_USER, password: process.env.BOT_3_PASS });
 if (process.env.BOT_4_USER && process.env.BOT_4_PASS) accounts.push({ username: process.env.BOT_4_USER, password: process.env.BOT_4_PASS });
 
-// 3. FORTIFIED BOT FABRICATOR
+// 3. STEALTH BOT FABRICATOR
 function spawnAFKBot(account) {
-  console.log(`[System] Dispatching client emulation for: ${account.username}...`);
+  console.log(`[System] Dispatching stealth client for: ${account.username}...`);
 
   const bot = mineflayer.createBot({
     host: SERVER_HOST,
     port: SERVER_PORT,
     username: account.username,
     auth: 'offline',
-    // HARDCODING MODERN STABLE REVISION (Forces server network compliance)
-    version: '1.20.4', 
-    viewDistance: 'tiny', // Mimics a low-end client to save bandwidth
-    checkTimeoutInterval: 90000, // Extends timeout windows for high-latency proxies
-    closeTimeout: 90000
+    version: '1.20.4', // Forces server network compliance
+    viewDistance: 'tiny',
+    checkTimeoutInterval: 120000, // Maximized timeout window for strict proxies
+    closeTimeout: 120000,
+    physicsEnabled: true // Emulates realistic user gravity/movement updates
   });
 
   bot.isTeleporting = false; 
   let autoAcceptInterval = null;
 
   bot.once('spawn', () => {
-    console.log(`[${account.username}] Emulation successful. Logged into hardware layer.`);
+    console.log(`[${account.username}] Connection successful. Bypassed handshake security.`);
     
     setTimeout(() => {
       bot.chat(`/login ${account.password}`);
       console.log(`[${account.username}] Auth profile delivered.`);
       
       setTimeout(() => {
-        console.log(`[${account.username}] Relocating to target cluster world via /maghrebsmp`);
+        console.log(`[${account.username}] Moving to world via /maghrebsmp`);
         bot.chat('/maghrebsmp');
 
         setTimeout(() => {
-          console.log(`[${account.username}] Standby. Teleport acceptance daemon online.`);
+          console.log(`[${account.username}] Active. Teleport auto-accept loop running.`);
           
           if (autoAcceptInterval) clearInterval(autoAcceptInterval);
           autoAcceptInterval = setInterval(() => {
             if (!bot.isTeleporting) {
               bot.chat('/tpaccept');
             }
-          }, 5000);
+          }, 6000); // Shifted slightly to blend into chat ticks
           
         }, 5000);
-      }, 4000);
-    }, 3000);
+      }, 5000);
+    }, 4000);
   });
 
-  // Regular anti-AFK interaction loops
+  // Anti-AFK Swing (30-second loop)
   const afkInterval = setInterval(() => {
     if (bot.entity && !bot.isTeleporting) {
       bot.swingArm('right');
     }
   }, 30000);
 
-  // Chat/Message monitor stream
+  // Message monitoring stream
   bot.on('message', (jsonMsg) => {
     const cleanLine = jsonMsg.toString().toLowerCase().trim();
     const targetLower = BOSS_NAME.toLowerCase();
@@ -86,37 +86,43 @@ function spawnAFKBot(account) {
       bot.isTeleporting = true; 
       setTimeout(() => {
         bot.isTeleporting = false;
-        console.log(`[${account.username}] Arrival confirmed.`);
-      }, 8000);
+        console.log(`[${account.username}] Safe teleport complete.`);
+      }, 9000);
     }
   });
 
-  // Reconnect management loop
+  // Intelligent Reconnect Loop (Uses Randomized Anti-Detection Backoff)
   bot.on('end', (reason) => {
-    console.log(`[${account.username}] Node socket terminated (${reason}). Initiating cool-down sequence...`);
     if (autoAcceptInterval) clearInterval(autoAcceptInterval);
     clearInterval(afkInterval);
-    // Extended 30s cool-down loop to prevent IP blacklist propagation
-    setTimeout(() => spawnAFKBot(account), 30000);
+
+    // Pick a completely random delay between 45 and 90 seconds so the firewall can't spot a timer pattern
+    const randomCooldown = Math.floor(Math.random() * (90000 - 45000 + 1)) + 45000;
+    console.log(`[${account.username}] Node socket dropped (${reason}). Anti-detection cooldown triggered: Retrying in ${Math.round(randomCooldown / 1000)}s...`);
+    
+    setTimeout(() => spawnAFKBot(account), randomCooldown);
   });
 
   bot.on('error', (err) => {
+    // Silently log and ignore connection resets to avoid filling the screen
     if (err.code !== 'ECONNRESET') {
-      console.error(`[${account.username}] Application error:`, err.message);
+      console.error(`[${account.username}] Error:`, err.message);
     }
   });
 }
 
-// 4. HIGH-DELAY STAGGERED DEPLOYMENT SEQUENCE
+// 4. RANDOMIZED STAGGERED INITIAL LAUNCH
 if (accounts.length === 0) {
-  console.error("[System Error] Configuration map empty.");
+  console.error("[System Error] No accounts found in configurations.");
   process.exit(1);
 } else {
-  console.log(`[System] Initializing stealth cluster sequence for ${accounts.length} bots...`);
+  console.log(`[System] Initializing stealth cluster engine for ${accounts.length} bots...`);
   
   accounts.forEach((account, index) => {
+    // Spaces initial boot sequences by completely unpredictable intervals
+    const initialDelay = index * 35000 + Math.floor(Math.random() * 15000);
     setTimeout(() => {
       spawnAFKBot(account);
-    }, index * 30000); // Spaces connections out by 30 full seconds each!
+    }, initialDelay);
   });
 }
