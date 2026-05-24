@@ -1,99 +1,88 @@
 const mineflayer = require('mineflayer');
 const http = require('http');
-const socks = require('socks').SocksClient; // Built-in dependency for proxy socket bridging
 
 // 1. DUMMY WEB SERVER FOR RAILWAY HEALTH CHECKS
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Minecraft Proxy-Matrix Cluster is Online!\n');
-}).listen(PORT, () => console.log(`[System] Dummy server online on port ${PORT}`));
+  res.end('Minecraft No-Proxy AFK Cluster is Online!\n');
+}).listen(PORT, () => console.log(`[System] Dummy server running on port ${PORT}`));
 
-// 2. TARGET CONFIGURATION
+// 2. HARDCODED TARGET ACCOUNT
 const BOSS_NAME = 'Zzynox_'; 
+
+// 3. ENVIRONMENT CONFIGURATION
 const SERVER_HOST = process.env.SERVER_HOST;
 const SERVER_PORT = parseInt(process.env.SERVER_PORT || '25565', 10);
 
 const accounts = [];
-if (process.env.BOT_1_USER && process.env.BOT_1_PASS) accounts.push({ username: process.env.BOT_1_USER, password: process.env.BOT_1_PASS, proxy: process.env.BOT_1_PROXY });
-if (process.env.BOT_2_USER && process.env.BOT_2_PASS) accounts.push({ username: process.env.BOT_2_USER, password: process.env.BOT_2_PASS, proxy: process.env.BOT_2_PROXY });
-if (process.env.BOT_3_USER && process.env.BOT_3_PASS) accounts.push({ username: process.env.BOT_3_USER, password: process.env.BOT_3_PASS, proxy: process.env.BOT_3_PROXY });
-if (process.env.BOT_4_USER && process.env.BOT_4_PASS) accounts.push({ username: process.env.BOT_4_USER, password: process.env.BOT_4_PASS, proxy: process.env.BOT_4_PROXY });
+if (process.env.BOT_1_USER && process.env.BOT_1_PASS) {
+  accounts.push({ username: process.env.BOT_1_USER, password: process.env.BOT_1_PASS });
+}
+if (process.env.BOT_2_USER && process.env.BOT_2_PASS) {
+  accounts.push({ username: process.env.BOT_2_USER, password: process.env.BOT_2_PASS });
+}
+if (process.env.BOT_3_USER && process.env.BOT_3_PASS) {
+  accounts.push({ username: process.env.BOT_3_USER, password: process.env.BOT_3_PASS });
+}
+if (process.env.BOT_4_USER && process.env.BOT_4_PASS) {
+  accounts.push({ username: process.env.BOT_4_USER, password: process.env.BOT_4_PASS });
+}
 
-// 3. CORE MATRIX FABRICATOR
+// 4. BOT ENGINE
 function spawnAFKBot(account) {
-  console.log(`[System] Routing connection matrix for: ${account.username}...`);
+  console.log(`[System] Launching standard client for: ${account.username}...`);
 
-  const botOptions = {
+  const bot = mineflayer.createBot({
     host: SERVER_HOST,
     port: SERVER_PORT,
     username: account.username,
     auth: 'offline',
-    version: '1.20.4',
+    version: '1.20.4', 
     viewDistance: 'tiny',
-    checkTimeoutInterval: 120000,
-    closeTimeout: 120000,
+    checkTimeoutInterval: 90000,
+    closeTimeout: 90000,
     physicsEnabled: true
-  };
+  });
 
-  // IF A PROXY VARIABLE EXISTS, INJECT NETWORK TUNNEL HOOKS
-  if (account.proxy) {
-    try {
-      const proxyParts = account.proxy.replace('socks5://', '').split(':');
-      const proxyHost = proxyParts[0];
-      const proxyPort = parseInt(proxyParts[1], 10);
-
-      botOptions.connect = (client) => {
-        socks.createConnection({
-          proxy: { host: proxyHost, port: proxyPort, type: 5 },
-          command: 'connect',
-          destination: { host: SERVER_HOST, port: SERVER_PORT }
-        }, (err, info) => {
-          if (err) {
-            console.error(`[${account.username}] Proxy Gateway Error: ${err.message}`);
-            client.emit('error', err);
-            return;
-          }
-          botOptions.socket = info.socket;
-          client.setSocket(info.socket);
-        });
-      };
-      console.log(`[${account.username}] Security Proxy Linked: ${proxyHost}:${proxyPort}`);
-    } catch (proxyError) {
-      console.error(`[${account.username}] Failed parsing proxy string structure.`);
-    }
-  }
-
-  const bot = mineflayer.createBot(botOptions);
   bot.isTeleporting = false; 
   let autoAcceptInterval = null;
 
   bot.once('spawn', () => {
-    console.log(`[${account.username}] Stream authenticated via tunnel.`);
+    console.log(`[${account.username}] Connected to host lobby.`);
     
     setTimeout(() => {
       bot.chat(`/login ${account.password}`);
+      console.log(`[${account.username}] Login executed.`);
       
       setTimeout(() => {
+        console.log(`[${account.username}] Moving to world via /maghrebsmp`);
         bot.chat('/maghrebsmp');
 
+        // Allow server time to swap worlds safely
         setTimeout(() => {
+          console.log(`[${account.username}] Teleport handler active.`);
+          
           if (autoAcceptInterval) clearInterval(autoAcceptInterval);
           autoAcceptInterval = setInterval(() => {
-            if (!bot.isTeleporting) bot.chat('/tpaccept');
+            if (!bot.isTeleporting) {
+              bot.chat('/tpaccept');
+            }
           }, 6000);
           
         }, 5000);
-      }, 5000);
-    }, 4000);
+
+      }, 4000);
+
+    }, 3000);
   });
 
-  // Anti-AFK Swing Action
+  // Anti-AFK Swing (30-second loop)
   const afkInterval = setInterval(() => {
     if (bot.entity && !bot.isTeleporting) bot.swingArm('right');
   }, 30000);
 
-  // Text Monitor Stream Interceptor
+  // Message parsing stream
   bot.on('message', (jsonMsg) => {
     const cleanLine = jsonMsg.toString().toLowerCase().trim();
     const targetLower = BOSS_NAME.toLowerCase();
@@ -104,32 +93,45 @@ function spawnAFKBot(account) {
     }
 
     if ((cleanLine.includes('accepted') || cleanLine.includes('teleporting') || cleanLine.includes('countdown')) && !bot.isTeleporting) {
+      console.log(`[${account.username}] Teleport detected. Freezing...`);
       bot.isTeleporting = true; 
-      setTimeout(() => { bot.isTeleporting = false; }, 9000);
+
+      setTimeout(() => {
+        bot.isTeleporting = false;
+        console.log(`[${account.username}] Unfrozen.`);
+      }, 9000);
     }
   });
 
-  // Cool-down Reconnect Routine
+  // Reconnect Sequence with randomized anti-spam delays
   bot.on('end', (reason) => {
     if (autoAcceptInterval) clearInterval(autoAcceptInterval);
     clearInterval(afkInterval);
 
     const randomCooldown = Math.floor(Math.random() * (60000 - 30000 + 1)) + 30000;
-    console.log(`[${account.username}] Connection dropped (${reason}). Re-routing stream in ${Math.round(randomCooldown / 1000)}s...`);
+    console.log(`[${account.username}] Disconnected (${reason}). Retrying in ${Math.round(randomCooldown / 1000)}s...`);
     setTimeout(() => spawnAFKBot(account), randomCooldown);
   });
 
   bot.on('error', (err) => {
-    if (err.code !== 'ECONNRESET') console.error(`[${account.username}] Error:`, err.message);
+    if (err.code !== 'ECONNRESET') {
+      console.error(`[${account.username}] Error:`, err.message);
+    }
   });
 }
 
-// Global Initialization
+// 5. STAGGERED INITIAL LAUNCH ROUTINE
 if (accounts.length === 0) {
+  console.error("[System Error] Missing configuration variables.");
   process.exit(1);
 } else {
-  console.log(`[System] Initializing stealth cluster sequence...`);
+  console.log(`[System] Deploying ${accounts.length} unproxied nodes...`);
+  
   accounts.forEach((account, index) => {
-    setTimeout(() => { spawnAFKBot(account); }, index * 30000);
+    // Spaces initial boot sequences by completely unpredictable intervals
+    const initialDelay = index * 35000 + Math.floor(Math.random() * 15000);
+    setTimeout(() => {
+      spawnAFKBot(account);
+    }, initialDelay);
   });
 }
